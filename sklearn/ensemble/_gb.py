@@ -224,6 +224,44 @@ class BaseGradientBoosting(BaseEnsemble, metaclass=ABCMeta):
 
         return raw_predictions
 
+    def decision_path(self, X):
+        """
+        Return the decision path in the gradient boosting.
+
+        Parameters
+        ----------
+        X : {array-like, sparse matrix} of shape (n_samples, n_features)
+            The input samples. Internally, its dtype will be converted to
+            ``dtype=np.float32``. If a sparse matrix is provided, it will be
+            converted into a sparse ``csr_matrix``.
+
+        Returns
+        -------
+        indicator : sparse matrix of shape (n_samples, n_nodes)
+            Return a node indicator matrix where non zero elements indicates
+            that the samples goes through the nodes. The non zero values are
+            each node impurity. The matrix is of CSR format.
+
+        n_nodes_ptr : ndarray of shape (n_estimators + 1,)
+            The columns from indicator[n_nodes_ptr[i]:n_nodes_ptr[i+1]]
+            gives the indicator value for the i-th estimator.
+
+        """
+        X = check_array(X, dtype=DTYPE, order="C", accept_sparse='csr')
+
+        indicators=[]
+        for estimator in self.estimators_:
+            tree = estimator[0]
+            impurity = tree.tree_.impurity.reshape((1,-1))
+            decision = tree.decision_path(X).todense()
+            indicators.append(csr_matrix(np.multiply(impurity,decision)))
+
+        n_nodes = [0]
+        n_nodes.extend([i.shape[1] for i in indicators])
+        n_nodes_ptr = np.array(n_nodes).cumsum()
+
+        return sparse_hstack(indicators).tocsr(), n_nodes_ptr
+
     def _check_params(self):
         """Check validity of parameters and raise ValueError if not valid."""
         if self.n_estimators <= 0:
