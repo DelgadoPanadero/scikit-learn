@@ -38,6 +38,7 @@ from ._gradient_boosting import _random_sample_mask
 import numbers
 import numpy as np
 
+from scipy.sparse import hstack as sparse_hstack
 from scipy.sparse import csc_matrix
 from scipy.sparse import csr_matrix
 from scipy.sparse import issparse
@@ -249,7 +250,7 @@ class BaseGradientBoosting(BaseEnsemble, metaclass=ABCMeta):
         """
         X = check_array(X, dtype=DTYPE, order="C", accept_sparse='csr')
 
-        indicators=[]
+        indicators = []
         for estimator in self.estimators_:
             tree = estimator[0]
             impurity = tree.tree_.impurity.reshape((1,-1))
