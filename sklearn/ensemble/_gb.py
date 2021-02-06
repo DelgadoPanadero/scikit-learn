@@ -253,9 +253,11 @@ class BaseGradientBoosting(BaseEnsemble, metaclass=ABCMeta):
         indicators = []
         for estimator in self.estimators_:
             tree = estimator[0]
-            impurity = tree.tree_.impurity.reshape((1,-1))
+            values = tree.tree_.value.reshape((1, -1))
             decision = tree.decision_path(X).todense()
-            indicators.append(csr_matrix(np.multiply(impurity,decision)))
+            values[decision == 0] = np.nan
+            indicators.append(csr_matrix(values))
+            # indicators.append(csr_matrix(np.multiply(values, decision)))
 
         n_nodes = [0]
         n_nodes.extend([i.shape[1] for i in indicators])
