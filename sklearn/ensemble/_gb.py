@@ -39,6 +39,7 @@ import numbers
 import numpy as np
 
 from scipy.sparse import hstack as sparse_hstack
+from scipy.sparse import vstack as sparse_vstack
 from scipy.sparse import csc_matrix
 from scipy.sparse import csr_matrix
 from scipy.sparse import issparse
@@ -226,6 +227,7 @@ class BaseGradientBoosting(BaseEnsemble, metaclass=ABCMeta):
         return raw_predictions
 
     def decision_path(self, X):
+
         """
         Return the decision path in the gradient boosting.
 
@@ -250,20 +252,43 @@ class BaseGradientBoosting(BaseEnsemble, metaclass=ABCMeta):
         """
         X = check_array(X, dtype=DTYPE, order="C", accept_sparse='csr')
 
-        indicators = []
+        residuals = []
         for estimator in self.estimators_:
             tree = estimator[0]
-            values = tree.tree_.value.reshape((1, -1))
-            decision = tree.decision_path(X).todense()
-            values[decision == 0] = np.nan
-            indicators.append(csr_matrix(values))
-            # indicators.append(csr_matrix(np.multiply(values, decision)))
+            decisions = tree.decision_path(X).todense()
+
+            values = tree.tree_.value.reshape((1,-1))
+            values = values * self.learning_rate
+
+            indicators = []
+            for decision in decisions:
+                values_ = values.copy()
+                values_[decision.squeeze() == 0] = np.nan
+
+                is_leave=tree.tree_.children_left==-1
+                is_value=~np.isnan(values_)
+
+                idx = np.argwhere(np.logical_and(is_value, is_leave))[0,1]
+                while idx!=0:
+                    is_left = idx==tree.tree_.children_left
+                    is_right = idx==tree.tree_.children_right
+                    father_idx = np.argwhere(np.logical_or(is_left,is_right))[0][0]
+                    values_[0,idx] = values_[0,idx]-values_[0,father_idx]
+                    idx = father_idx
+
+                indicators.append(csr_matrix(values_))
+
+            residuals.append(sparse_vstack(indicators).tocsr())
 
         n_nodes = [0]
         n_nodes.extend([i.shape[1] for i in indicators])
         n_nodes_ptr = np.array(n_nodes).cumsum()
 
-        return sparse_hstack(indicators).tocsr(), n_nodes_ptr
+        base = self._raw_predict_init(X)[0,0]
+        residuals = sparse_hstack(residuals).tocsr()
+
+        return base, residuals, n_nodes_ptr
+
 
     def _check_params(self):
         """Check validity of parameters and raise ValueError if not valid."""
