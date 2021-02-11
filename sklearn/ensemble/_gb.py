@@ -289,20 +289,16 @@ class BaseGradientBoosting(BaseEnsemble, metaclass=ABCMeta):
 
                     idx = father_idx
 
-                #TODO: tiene sentiedo que la matriz sea sparse con NANs en vez de 0s?
-                indicators.append(csr_matrix(values_))
+                indicators.append(values_)
                 explanations[i]+=explain
 
-            residuals.append(sparse_vstack(indicators).tocsr())
-
-        n_nodes = [0]
-        n_nodes.extend([i.shape[1] for i in indicators])
-        n_nodes_ptr = np.array(n_nodes).cumsum()
+            residuals.append(np.vstack(indicators))
 
         base = self._raw_predict_init(X)[0,0]
-        residuals = sparse_hstack(residuals).tocsr()
+        residuals = np.hstack(residuals)
 
-        return base, residuals, explanations, n_nodes_ptr
+        return base, residuals, explanations
+
 
     def _check_params(self):
         """Check validity of parameters and raise ValueError if not valid."""
