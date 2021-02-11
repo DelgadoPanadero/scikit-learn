@@ -253,7 +253,7 @@ class BaseGradientBoosting(BaseEnsemble, metaclass=ABCMeta):
         X = check_array(X, dtype=DTYPE, order="C", accept_sparse='csr')
 
         residuals = []
-        superfoo = []
+        explanations = [[] for _ in range(X.shape[0])]
         for estimator in self.estimators_:
             tree = estimator[0]
             decisions = tree.decision_path(X).todense()
@@ -265,17 +265,17 @@ class BaseGradientBoosting(BaseEnsemble, metaclass=ABCMeta):
             features = tree.tree_.feature
 
             indicators = []
-            foos = []
-            for decision in decisions:
+            for i in range(len(decisions)):
                 values_ = values.copy()
-                values_[decision.squeeze() == 0] = np.nan
-                values_[0, 0] = 0
+                values_[decisions[i].squeeze() == 0] = np.nan
+                values_[0, 0] = 0.
 
                 is_leave = tree.tree_.children_left == -1
                 is_value = ~np.isnan(values_)
 
                 idx = np.argwhere(np.logical_and(is_value, is_leave))[0, 1]
-                foo = ["" for _ in range(values_.shape[-1])]
+                explain = ["" for _ in range(values_.shape[-1])]
+
                 while idx != 0:
                     is_left = idx == tree.tree_.children_left
                     is_right = idx == tree.tree_.children_right
@@ -285,18 +285,15 @@ class BaseGradientBoosting(BaseEnsemble, metaclass=ABCMeta):
                     sign = ""
                     sign = "<" if is_right.any() else sign
                     sign = ">" if is_left.any() else sign
-                    foo[idx] = f"col {features[father_idx]} {sign} {thresholds[father_idx]}"
+                    explain[idx] = f"col {features[father_idx]} {sign} {thresholds[father_idx]}"
 
                     idx = father_idx
 
+                #TODO: tiene sentiedo que la matriz sea sparse con NANs en vez de 0s?
                 indicators.append(csr_matrix(values_))
-                foos.append(foo)
+                explanations[i]+=explain
 
             residuals.append(sparse_vstack(indicators).tocsr())
-            superfoo.append(foos)
-            # TODO: concatenar los foo de los foos que estén en la misma posicion
-            # 1 superfoo de 10 foos de 500 foo (de len 15)
-            # TODO: 1 foos de 500 foo que tenga en cada uno de los 15 elementos,
 
         n_nodes = [0]
         n_nodes.extend([i.shape[1] for i in indicators])
@@ -305,7 +302,7 @@ class BaseGradientBoosting(BaseEnsemble, metaclass=ABCMeta):
         base = self._raw_predict_init(X)[0,0]
         residuals = sparse_hstack(residuals).tocsr()
 
-        return base, residuals, n_nodes_ptr, superfoo
+        return base, residuals, explanations, n_nodes_ptr
 
     def _check_params(self):
         """Check validity of parameters and raise ValueError if not valid."""
