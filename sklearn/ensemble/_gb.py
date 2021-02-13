@@ -253,16 +253,33 @@ class BaseGradientBoosting(BaseEnsemble, metaclass=ABCMeta):
         X = check_array(X, dtype=DTYPE, order="C", accept_sparse='csr')
 
         residuals = []
-        explanations = [[] for _ in range(X.shape[0])]
+        explanations = []
         for estimator in self.estimators_:
             tree = estimator[0]
-            decisions = tree.decision_path(X).todense()
+
+            for i in range(tree.tree_.node_count):
+
+                parent_idx = None
+
+                if i in tree.tree_.children_left:
+                    parent_idx = np.argwhere(tree.tree_.children_left==i)[0][0]
+                    sign = "<"
+
+                if i in tree.tree_.children_right:
+                    parent_idx = np.argwhere(tree.tree_.children_right==i)[0][0]
+                    sign = ">"
+
+                feature  = tree.tree_.feature[parent_idx]
+                threshold = tree.tree_.threshold[parent_idx]
+
+                if parent_idx is not None:
+                    explanations.append([feature, sign, threshold])
+                else:
+                    explanations.append([])
 
             values = tree.tree_.value.reshape((1, -1))
             values = values * self.learning_rate
-
-            thresholds = tree.tree_.threshold
-            features = tree.tree_.feature
+            decisions = tree.decision_path(X).todense()
 
             indicators = []
             for i in range(len(decisions)):
@@ -274,23 +291,15 @@ class BaseGradientBoosting(BaseEnsemble, metaclass=ABCMeta):
                 is_value = ~np.isnan(values_)
 
                 idx = np.argwhere(np.logical_and(is_value, is_leave))[0, 1]
-                explain = ["" for _ in range(values_.shape[-1])]
-
                 while idx != 0:
                     is_left = idx == tree.tree_.children_left
                     is_right = idx == tree.tree_.children_right
                     father_idx = np.argwhere(np.logical_or(is_left, is_right))[0][0]
                     values_[0, idx] = values_[0, idx] - values_[0, father_idx]
 
-                    sign = ""
-                    sign = "<" if is_right.any() else sign
-                    sign = ">" if is_left.any() else sign
-                    explain[idx] = f"col {features[father_idx]} {sign} {thresholds[father_idx]}"
-
                     idx = father_idx
 
                 indicators.append(values_)
-                explanations[i]+=explain
 
             residuals.append(np.vstack(indicators))
 
