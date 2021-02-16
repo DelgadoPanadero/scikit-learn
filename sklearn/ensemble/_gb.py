@@ -231,6 +231,8 @@ class BaseGradientBoosting(BaseEnsemble, metaclass=ABCMeta):
         """
         Return the decision path in the gradient boosting.
 
+        Authors: Beatriz Hernandez Angel Delgado
+
         Parameters
         ----------
         X : {array-like, sparse matrix} of shape (n_samples, n_features)
@@ -252,10 +254,18 @@ class BaseGradientBoosting(BaseEnsemble, metaclass=ABCMeta):
         """
         X = check_array(X, dtype=DTYPE, order="C", accept_sparse='csr')
 
+        if self._estimator_type=='regressor':
+            base = self._raw_predict_init(X)[0,0]
+            class_idx = np.argmax(proba, axis=1)
+
+        if self._estimator_type=='classifier':
+            base = self.predict_proba(X)
+            class_idx = 0
+
         residuals = []
         explanations = []
         for estimator in self.estimators_:
-            tree = estimator[0]
+            tree = estimator[class_idx]
 
             for i in range(tree.tree_.node_count):
 
@@ -286,10 +296,9 @@ class BaseGradientBoosting(BaseEnsemble, metaclass=ABCMeta):
                 values_ = values.copy()
                 values_[decisions[i].squeeze() == 0] = np.nan
                 values_[0, 0] = 0.
-
                 is_leave = tree.tree_.children_left == -1
                 is_value = ~np.isnan(values_)
-
+                print(values_)
                 idx = np.argwhere(np.logical_and(is_value, is_leave))[0, 1]
                 while idx != 0:
                     is_left = idx == tree.tree_.children_left
@@ -303,7 +312,6 @@ class BaseGradientBoosting(BaseEnsemble, metaclass=ABCMeta):
 
             residuals.append(np.vstack(indicators))
 
-        base = self._raw_predict_init(X)[0,0]
         residuals = np.hstack(residuals)
 
         return base, residuals, explanations
