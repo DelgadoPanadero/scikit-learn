@@ -254,32 +254,32 @@ class BaseGradientBoosting(BaseEnsemble, metaclass=ABCMeta):
         """
         X = check_array(X, dtype=DTYPE, order="C", accept_sparse='csr')
 
-        if self._estimator_type=='regressor':
-            base = self._raw_predict_init(X)[0,0]
-            class_idx = np.argmax(proba, axis=1)
-
-        if self._estimator_type=='classifier':
-            base = self.predict_proba(X)
+        if self._estimator_type == 'regressor':
+            base = self._raw_predict_init(X)[0, 0]
             class_idx = 0
+
+        if self._estimator_type == 'classifier':
+            class_idx = np.argmax(self.predict_proba(X), axis=1)
+            base = self._raw_predict_init(X)[class_idx]
 
         residuals = []
         explanations = []
-        for estimator in self.estimators_:
-            tree = estimator[class_idx]
+        for estimator in self.estimators_[:, class_idx]:
+            tree = estimator[0]
 
             for i in range(tree.tree_.node_count):
 
                 parent_idx = None
 
                 if i in tree.tree_.children_left:
-                    parent_idx = np.argwhere(tree.tree_.children_left==i)[0][0]
+                    parent_idx = np.argwhere(tree.tree_.children_left == i)[0][0]
                     sign = "<"
 
                 if i in tree.tree_.children_right:
-                    parent_idx = np.argwhere(tree.tree_.children_right==i)[0][0]
+                    parent_idx = np.argwhere(tree.tree_.children_right == i)[0][0]
                     sign = ">"
 
-                feature  = tree.tree_.feature[parent_idx]
+                feature = tree.tree_.feature[parent_idx]
                 threshold = tree.tree_.threshold[parent_idx]
 
                 if parent_idx is not None:
@@ -315,7 +315,6 @@ class BaseGradientBoosting(BaseEnsemble, metaclass=ABCMeta):
         residuals = np.hstack(residuals)
 
         return base, residuals, explanations
-
 
     def _check_params(self):
         """Check validity of parameters and raise ValueError if not valid."""
