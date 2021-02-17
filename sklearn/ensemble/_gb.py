@@ -260,12 +260,12 @@ class BaseGradientBoosting(BaseEnsemble, metaclass=ABCMeta):
 
         if self._estimator_type == 'classifier':
             class_idx = np.argmax(self.predict_proba(X), axis=1)
-            base = self._raw_predict_init(X)[class_idx]
+            base = self._raw_predict_init(X)[0,class_idx]
 
         residuals = []
         explanations = []
-        for estimator in self.estimators_[:, class_idx]:
-            tree = estimator[0]
+        for estimator in self.estimators_[:, class_idx].ravel():
+            tree = estimator
 
             for i in range(tree.tree_.node_count):
 
@@ -298,7 +298,7 @@ class BaseGradientBoosting(BaseEnsemble, metaclass=ABCMeta):
                 values_[0, 0] = 0.
                 is_leave = tree.tree_.children_left == -1
                 is_value = ~np.isnan(values_)
-                print(values_)
+
                 idx = np.argwhere(np.logical_and(is_value, is_leave))[0, 1]
                 while idx != 0:
                     is_left = idx == tree.tree_.children_left
